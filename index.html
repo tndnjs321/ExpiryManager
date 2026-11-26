@@ -23,7 +23,10 @@
 
 dialog{width:min(540px,calc(100% - 28px));max-height:85vh;overflow-y:auto;border:1px solid #b6c4d3;border-radius:16px;padding:24px;color:#172c44}dialog::backdrop{background:#172c4470}.backup-check{display:flex;align-items:flex-start;gap:10px;margin-top:18px;font-weight:400}.backup-check input{width:20px;min-width:20px;height:20px;margin-top:4px}button:disabled{opacity:.5;cursor:not-allowed}.stats button.has-expired{background:#ffe0e3;border-color:#cf3445;color:#a0172b}.stats button.has-expired:hover{background:#ffccd2}
 </style>
-<main><header><div><span class="muted">BAKERY · STORE TOOLS</span><h1>유통기한 관리</h1><div id="today" class="muted"></div></div><button id="add" class="primary">상품 등록</button></header>
+
+<style>[hidden]{display:none!important}#authGate{max-width:480px;margin:auto;padding:24px 14px}#authGate label{margin:12px 0}#authGate input{margin-top:6px}#authGate button{width:100%;margin-top:8px}#authBar{margin-top:14px;padding:12px;border:1px solid #dae2ec;border-radius:9px;background:#fff}</style>
+<div id="authGate"><section><h1>유통기한 관리</h1><p class="muted">개발 환경 · 로그인</p><form id="authForm" hidden><label>이메일<input id="authEmail" type="email" autocomplete="username" required></label><label>비밀번호<input id="authPassword" type="password" autocomplete="current-password" required></label><button class="primary" id="authSubmit">로그인</button></form><p id="authStatus" role="status">연결 확인 중…</p><button id="authExit" hidden>로그아웃</button></section></div>
+<main id="appMain" hidden inert><header><div><span class="muted">BAKERY · STORE TOOLS</span><h1>유통기한 관리</h1><div id="today" class="muted"></div></div><button id="add" class="primary">상품 등록</button></header><div id="authBar" class="row"><div><strong id="authStore"></strong><div class="muted">개발용 · 상품 데이터는 이 브라우저에만 저장됩니다.</div></div><button id="appLogout">로그아웃</button></div>
 <div class="stats"><button data-view="active">관리 중<strong id="countActive">0</strong></button><button data-view="expired">기한 경과<strong id="countExpired">0</strong></button><button data-view="today">오늘까지<strong id="countToday">0</strong></button><button data-view="soon">2일 이내<strong id="countSoon">0</strong></button></div>
 <section><h2 id="formTitle">입고 상품 등록</h2><form id="form"><div class="fields"><div id="nameField"><label for="name">상품명 *</label><input id="name" required maxlength="100" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="nameOptions" aria-expanded="false" placeholder="상품명 입력 또는 선택"><div id="nameSuggestions" hidden><div id="nameHeading" class="name-heading">등록된 상품</div><div id="nameOptions" role="listbox" aria-label="등록된 상품명"></div><p id="nameEmpty" hidden>일치하는 상품이 없습니다. 새 상품명으로 등록할 수 있습니다.</p></div></div><label>유통기한 *<input id="expiry" type="date" required></label><label>수량 <small>선택</small><input id="quantity" type="number" min="1" max="999999" step="1" placeholder="미입력 가능"></label><label class="wide">메모 <small>선택</small><input id="note" maxlength="300" placeholder="예: 냉장 쇼케이스 / 진열 위치"></label></div><div class="actions"><button type="submit" class="primary" id="save">등록</button><button type="button" id="cancel" hidden>수정 취소</button></div></form><div id="message" role="status" aria-live="polite"></div></section>
 <section id="productSection"><div class="row"><h2>상품 목록</h2><label>보기<select id="view"><option value="active">관리 중 전체</option><option value="expired">기한 경과</option><option value="today">오늘까지</option><option value="soon">1~2일 이내</option><option value="history">처리 내역</option></select></label></div><label>상품 검색<input id="search" type="search" placeholder="상품명 또는 메모 검색"></label><div id="list"></div></section>
@@ -73,6 +76,50 @@ $('cleanupSaved').onchange=()=>{$('confirmCleanup').disabled=!$('cleanupSaved').
 $('confirmCleanup').onclick=()=>{if(!cleanupSnapshot||!$('cleanupSaved').checked||$('cleanupSaved').disabled)return;if(cleanupSnapshot.items!==JSON.stringify(state.items)){$('cleanupMessage').textContent='기록이 변경되었습니다. 취소 후 다시 확인하세요.';$('confirmCleanup').disabled=true;return}const ids=new Set(cleanupSnapshot.ids),eligible=new Set(oldHistory(state.items).map(i=>i.id)),items=state.items.filter(i=>!ids.has(i.id)||!eligible.has(i.id)),removed=state.items.length-items.length;if(persist({...state,items})){$('cleanupDialog').close();cleanupSnapshot=null;reset();render();notify('오래된 처리 내역 '+removed+'건을 정리했습니다. 필요한 경우 정리 전 백업을 불러와 복원하세요.')}};
 $('cancelCleanup').onclick=()=>$('cleanupDialog').close();$('cleanupDialog').addEventListener('close',()=>{cleanupSnapshot=null});
 render();setInterval(render,60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)render()});window.addEventListener('storage',e=>{if(e.key===KEY){try{state=e.newValue?validate(JSON.parse(e.newValue)):{version:1,items:[],lastBackup:null};ready=true;reset();render();notify('다른 탭의 변경 내용을 반영했습니다.')}catch(err){ready=false;notify('다른 탭 데이터에 오류가 있습니다. 저장을 중지했습니다.')}}});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+(()=>{
+'use strict';
+const el=id=>document.getElementById(id);
+const msg=t=>el('authStatus').textContent=t;
+const hide=()=>{el('appMain').hidden=true;el('appMain').inert=true;el('authGate').hidden=false;el('authStore').textContent='';};
+if(!window.supabase){msg('인증 라이브러리를 불러오지 못했습니다. 새로고침하세요.');return;}
+const client=window.supabase.createClient('https://lfkxwylieimqmusjnxpx.supabase.co','sb_publishable_nhXpBa4cbLBx2fg_ufOOPg_kkDVtO38',{auth:{storageKey:'expiry-manager-dev-auth',detectSessionInUrl:false}});
+let revision=0, authorizedUser=null;
+function clearUI(){if(el('cleanupDialog').open)el('cleanupDialog').close();reset();el('search').value='';el('view').value='active';notify('');}
+async function inspect(session,seq){
+ if(seq!==revision)return;
+ el('authForm').hidden=!!session;el('authExit').hidden=!session;
+ if(!session){authorizedUser=null;hide();msg('이메일과 비밀번호를 입력하세요.');return;}
+ msg('매장 접근 권한 확인 중…');
+ try{
+  const {data,error}=await client.schema('bakery_dev').from('store_members').select('role, stores(id,name)').eq('user_id',session.user.id);
+  if(seq!==revision)return;
+  if(error)throw error;
+  const allowed=(data||[]).filter(row=>row.stores&&row.role==='owner');
+  if(!allowed.length){authorizedUser=null;hide();msg('현재 개발용 화면은 매장 owner 계정만 사용할 수 있습니다.');return;}
+  if(allowed.length!==1){authorizedUser=null;hide();msg('매장이 여러 개입니다. 매장 선택 기능 구현 후 이용하세요.');return;}
+  if(authorizedUser!==session.user.id)clearUI();
+  authorizedUser=session.user.id;
+  el('authStore').textContent=allowed[0].stores.name+' · '+allowed[0].role;
+  el('authGate').hidden=true;el('appMain').hidden=false;el('appMain').inert=false;render();
+ }catch(e){if(seq===revision){authorizedUser=null;hide();msg('매장 조회 실패: '+(e.message||'연결 오류'));}}
+}
+client.auth.onAuthStateChange((event,session)=>{
+ const seq=++revision;
+ if(!session||authorizedUser!==session.user.id||event==='SIGNED_OUT'){hide();clearUI();}
+ setTimeout(()=>inspect(session,seq),0);
+});
+el('authForm').onsubmit=async e=>{
+ e.preventDefault();el('authSubmit').disabled=true;msg('로그인 중…');
+ try{const {error}=await client.auth.signInWithPassword({email:el('authEmail').value.trim(),password:el('authPassword').value});if(error)msg('로그인 실패: '+error.message);}
+ catch(e){msg('로그인 연결 오류: '+e.message);}
+ finally{el('authPassword').value='';el('authSubmit').disabled=false;}
+};
+async function logout(){++revision;authorizedUser=null;hide();clearUI();el('authForm').hidden=true;el('authExit').hidden=false;msg('로그아웃 중…');el('authExit').disabled=true;try{const {error}=await client.auth.signOut({scope:'local'});if(error)throw error;el('authForm').hidden=false;el('authExit').hidden=true;msg('로그아웃했습니다.');}catch(e){msg('로그아웃 실패: '+e.message+' · 다시 시도하세요.');}finally{el('authExit').disabled=false;}}
+el('authExit').onclick=logout;el('appLogout').onclick=logout;
+})();
 </script></html>
 
 
