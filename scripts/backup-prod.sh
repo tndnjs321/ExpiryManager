@@ -98,6 +98,21 @@ aws s3api get-object --endpoint-url "$R2_ENDPOINT" --bucket "$R2_BUCKET_NAME" --
 cmp -s "$file" "$tmp/verified.json" || { echo "R2 read-back integrity check failed"; exit 1; }
 [[ "$(sha256sum "$tmp/verified.json" | cut -d ' ' -f 1)" == "$digest" ]]
 echo "R2 upload and SHA-256 verification succeeded: $key"
+# Only publish counts from the verified snapshot. Avoid cross-store counts in pushes.
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    python3 - "$tmp/verified.json" <<'PY'
+import json, os, sys, uuid
+with open(sys.argv[1], encoding="utf-8") as f:
+    tables = json.load(f)["tables"]
+with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+    out.write("backup_verified=true\n")
+    if len(tables["stores"]) == 1:
+        store = str(uuid.UUID(tables["stores"][0]["id"]))
+        out.write(f"snapshot_store={store}\n")
+        out.write(f"products_count={len(tables['products'])}\n")
+        out.write(f"items_count={len(tables['expiry_items'])}\n")
+PY
+fi
 # Use only the verified object bytes, never a fresh DB query, for cleanup targets.
 echo "Preparing cleanup from verified backup (mode: $CLEANUP_MODE)"
 python3 - "$tmp/verified.json" "$tmp/cleanup.sql" "$tmp/count" "$CLEANUP_MODE" <<'PY'
@@ -153,6 +168,9 @@ fi
 count="$(cat "$tmp/cleanup-result")"
 [[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -le "$(cat "$tmp/count")" ]] || { echo "Unexpected cleanup result"; exit 1; }
 unset PGPASSWORD
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    printf 'cleanup_mode=%s\ncleanup_count=%s\n' "$CLEANUP_MODE" "$count" >> "$GITHUB_OUTPUT"
+fi
 if [[ "$CLEANUP_MODE" == "commit" ]]; then
     echo "COMMIT completed. Deleted records: $count"
 else
