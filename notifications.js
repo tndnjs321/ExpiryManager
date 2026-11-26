@@ -42,8 +42,10 @@ async function verify(c,s){
   const {data,error}=await table(c).select('id,enabled').eq('id',r.id).eq('user_id',c.userId).eq('store_id',c.storeId).maybeSingle();
   if(!active(c,s))return;
   if(error)throw error;
-  status(data?.enabled&&Notification.permission==='granted'?'이 기기 알림 등록됨':'이 기기 알림이 꺼져 있습니다. 다시 등록할 수 있습니다.');
+  const registered=data?.enabled&&Notification.permission==='granted';
+  status(registered?'이 기기 알림 등록됨':'이 기기 알림이 꺼져 있습니다. 다시 등록할 수 있습니다.');
   controls();
+  if(registered){try{const f=await sdk();if(active(c,s)&&!listener)listener=f.onMessage(f.messaging,()=>{if(ctx)status('유통기한 알림이 도착했습니다. 앱의 상품 목록을 확인하세요.');});}catch{if(active(c,s))status('기기는 등록되어 있으나 알림 수신 초기화에 실패했습니다. 다시 등록해 주세요.');}}
  }catch{if(active(c,s))status('기기 등록 상태 조회 실패. 다시 시도하세요.')}
 }
 async function enable(){
