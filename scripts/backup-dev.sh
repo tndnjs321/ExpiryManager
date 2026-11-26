@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-# This test never mutates the database.
+# Snapshot is read-only. The cleanup integration test always rolls back.
 [[ "${GITHUB_REF:-}" == "refs/heads/develop" ]] || { echo "Refusing non-develop execution"; exit 1; }
 : "${PGHOST:?Missing DB_HOST}" "${PGUSER:?Missing DB_USER}" "${PGPASSWORD:?Missing DB_PASSWORD}"
 : "${AWS_ACCESS_KEY_ID:?Missing R2_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY:?Missing R2_SECRET_ACCESS_KEY}"
@@ -71,7 +71,6 @@ SELECT jsonb_build_object(
 );
 COMMIT;
 SQL
-unset PGPASSWORD
 python3 - "$file" <<'PY'
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as f:
@@ -97,4 +96,60 @@ aws s3api get-object --endpoint-url "$R2_ENDPOINT" --bucket "$R2_BUCKET_NAME" --
 cmp -s "$file" "$tmp/verified.json" || { echo "R2 read-back integrity check failed"; exit 1; }
 [[ "$(sha256sum "$tmp/verified.json" | cut -d ' ' -f 1)" == "$digest" ]]
 echo "R2 upload and SHA-256 verification succeeded: $key"
-echo "No database records were deleted."
+# Use only the verified object bytes, never a fresh DB query, for cleanup targets.
+echo "Preparing cleanup test from verified backup"
+python3 - "$tmp/verified.json" "$tmp/cleanup.sql" "$tmp/count" <<'PY'
+import base64
+import datetime as dt
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as f:
+    backup = json.load(f)
+snapshot = dt.datetime.fromisoformat(backup["snapshotAt"].replace("Z", "+00:00"))
+if snapshot.tzinfo is None:
+    raise ValueError("Snapshot timestamp must include a timezone")
+cutoff = snapshot - dt.timedelta(days=15)
+targets = [
+    e for e in backup["tables"]["expiry_items"]
+    if e["status"] in ("sold", "discarded")
+    and e["processed_at"] is not None
+    and dt.datetime.fromisoformat(e["processed_at"].replace("Z", "+00:00")) <= cutoff
+]
+if len(targets) > 50000:
+    raise ValueError("Cleanup target limit exceeded")
+payload = base64.b64encode(json.dumps({
+    "snapshotAt": backup["snapshotAt"],
+    "targets": targets
+}, ensure_ascii=False).encode("utf-8")).decode("ascii")
+# Base64 has no SQL quoting characters. The SQL contains no raw record values.
+sql = """BEGIN;
+SET LOCAL statement_timeout = '120s';
+SET LOCAL search_path = pg_catalog;
+WITH payload AS (
+    SELECT convert_from(decode('%s', 'base64'), 'UTF8')::jsonb AS data
+)
+SELECT bakery_dev.cleanup_history_auto(
+    (data->>'snapshotAt')::timestamptz,
+    data->'targets'
+) FROM payload;
+ROLLBACK;
+""" % payload
+with open(sys.argv[2], "w", encoding="utf-8") as f:
+    f.write(sql)
+with open(sys.argv[3], "w", encoding="utf-8") as f:
+    f.write(str(len(targets)))
+PY
+echo "Eligible backed-up records: $(cat "$tmp/count")"
+# Test the actual function and its permissions, but never commit a deletion.
+if ! psql -X -qAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose \
+    < "$tmp/cleanup.sql" > "$tmp/cleanup-result" 2> "$tmp/cleanup-error"; then
+    echo "Cleanup integration test failed; transaction was not committed."
+    grep -oE 'ERROR:  [0-9A-Z]{5}:' "$tmp/cleanup-error" | head -n 1 || true
+    exit 1
+fi
+unset PGPASSWORD
+count="$(cat "$tmp/cleanup-result")"
+[[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -le "$(cat "$tmp/count")" ]] || { echo "Unexpected cleanup result"; exit 1; }
+echo "Cleanup integration test succeeded; matched records: $count"
+echo "ROLLBACK completed. No database records were deleted."
