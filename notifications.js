@@ -2,14 +2,14 @@
 (()=>{
 'use strict';
 const el=id=>document.getElementById(id);
-const key='expiry-manager-dev-push-device';
+const key='expiry-manager-prod-push-device';
 let ctx=null, seq=0, working=false, sdkPromise=null, listener=null;
 const status=t=>el('pushStatus').textContent=t;
 function read(){try{return JSON.parse(localStorage.getItem(key)||'null')}catch{return null}}
 function write(v){if(v)localStorage.setItem(key,JSON.stringify(v));else localStorage.removeItem(key)}
 function own(c,r){return !!c&&!!r&&r.userId===c.userId&&r.storeId===c.storeId&&typeof r.id==='string'}
 function active(c,s){return ctx===c&&seq===s}
-function table(c){return c.client.schema('bakery_dev').from('push_devices')}
+function table(c){return c.client.schema('bakery').from('push_devices')}
 function controls(){el('pushEnable').disabled=!ctx||working;el('pushDisable').disabled=!ctx||working||!own(ctx,read())}
 function supported(){return window.isSecureContext&&'Notification' in window&&'serviceWorker' in navigator&&'PushManager' in window}
 async function sdk(){
