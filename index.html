@@ -113,7 +113,15 @@ client.auth.onAuthStateChange((event,session)=>{
 });
 el('authForm').onsubmit=async e=>{
  e.preventDefault();el('authSubmit').disabled=true;msg('로그인 중…');
- try{const id=el('authEmail').value.trim();const password=el('authPassword').value;let credentials;if(id.includes('@')){credentials={email:id,password};}else{const phone=id.replace(/[\s-]/g,'');const normalized=/^010\d{8}$/.test(phone)?'+82'+phone.slice(1):phone;if(!/^\+8210\d{8}$/.test(normalized)){msg('올바른 휴대전화 번호 또는 이메일을 입력하세요.');return;}credentials={phone:normalized,password};}const {error}=await client.auth.signInWithPassword(credentials);if(error)msg('로그인 실패: '+error.message);}
+ try{
+  const identifier=el('authEmail').value.trim(),password=el('authPassword').value;
+  if(!identifier.includes('@')&&!/^(010\d{8}|\+8210\d{8})$/.test(identifier.replace(/[\s-]/g,''))){msg('올바른 휴대전화 번호 또는 이메일을 입력하세요.');return;}
+  const {data,error}=await client.functions.invoke('bakery-dev-login',{body:{identifier,password}});
+  if(error){const status=error.context?.status;if(status===429){msg('로그인 시도 횟수를 초과했습니다. 잠시 후 다시 시도하세요.');}else if(status===401||status===400){msg('아이디 또는 비밀번호를 확인하세요.');}else{msg('로그인 서버 연결 오류. 잠시 후 다시 시도하세요.');}return;}
+  if(!data?.access_token||!data?.refresh_token){msg('로그인 서버 응답 오류.');return;}
+  const {error:sessionError}=await client.auth.setSession({access_token:data.access_token,refresh_token:data.refresh_token});
+  if(sessionError)msg('로그인 세션 설정에 실패했습니다. 다시 시도하세요.');
+ }
  catch(e){msg('로그인 연결 오류: '+e.message);}
  finally{el('authPassword').value='';el('authSubmit').disabled=false;}
 };
