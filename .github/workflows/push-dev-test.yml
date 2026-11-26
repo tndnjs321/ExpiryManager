@@ -1,0 +1,111 @@
+name: Development FCM single-device test
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/push-dev-test.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: bakery-dev-push-test
+  cancel-in-progress: false
+
+jobs:
+  send-test:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout development source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Authenticate to Google Cloud without service account key
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/387988934070/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: notification-sender@personal-notifications-ed12b.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
+          access_token_lifetime: 600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Send one test notification to registered iOS device
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.NOTIFY_DB_USER }}
+          PGPASSWORD: ${{ secrets.NOTIFY_DB_PASSWORD }}
+          FCM_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGCONNECT_TIMEOUT: '20'
+        run: |
+          set -euo pipefail
+          export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
+          python3 - <<'PY'
+          import json, os, subprocess, urllib.request, urllib.error
+          if os.environ["GITHUB_REF"] != "refs/heads/develop":
+              raise SystemExit("Unexpected branch")
+          if os.environ["PGUSER"] != "bakery_dev_notify.lfkxwylieimqmusjnxpx":
+              raise SystemExit("Unexpected database account")
+          sql = """
+          BEGIN READ ONLY;
+          SET LOCAL statement_timeout = '20s';
+          SELECT current_user;
+          SELECT fcm_token FROM bakery_dev.push_devices
+          WHERE id = '97c91151-6358-4028-b684-f4305c4a17fd'
+            AND store_id = '2c2fc998-349d-4633-9163-166033975a1c'
+            AND enabled IS TRUE;
+          COMMIT;
+          """
+          db_env = dict(os.environ)
+          db_env.pop("FCM_ACCESS_TOKEN", None)
+          result = subprocess.run(
+              ["psql", "-X", "-qAt", "-v", "ON_ERROR_STOP=1"],
+              input=sql, text=True, capture_output=True, env=db_env, timeout=45,
+          )
+          os.environ.pop("PGPASSWORD", None)
+          if result.returncode:
+              raise SystemExit("Database query failed; check notify role, RLS and TLS configuration.")
+          lines = result.stdout.splitlines()
+          if len(lines) != 2 or lines[0] != "bakery_dev_notify" or not lines[1]:
+              raise SystemExit("Expected exactly one enabled test device and correct database role.")
+          token = lines[1]
+          print("Verified one enabled development test device")
+          payload = {"message": {
+              "token": token,
+              "notification": {
+                  "title": "유통기한 관리 (개발)",
+                  "body": "푸시 알림 연결 테스트입니다."
+              },
+              "webpush": {
+                  "headers": {"TTL": "300"},
+                  "fcm_options": {"link": "https://expiry-manager-dev.pages.dev/"}
+              }
+          }}
+          request = urllib.request.Request(
+              "https://fcm.googleapis.com/v1/projects/personal-notifications-ed12b/messages:send",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Authorization": "Bearer " + os.environ["FCM_ACCESS_TOKEN"], "Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  result = json.load(response)
+                  if not result.get("name"):
+                      raise SystemExit("FCM did not return a message identifier")
+          except urllib.error.HTTPError as error:
+              status = "UNKNOWN"
+              try:
+                  status = json.loads(error.read()).get("error", {}).get("status", "UNKNOWN")
+              except (ValueError, TypeError):
+                  pass
+              raise SystemExit(f"FCM request failed: HTTP {error.code}, {status}")
+          print("FCM accepted one test message. Device delivery must be verified separately.")
+          PY
