@@ -113,7 +113,7 @@ def send(row, access_token):
         return "unknown"
 
 
-def main():
+def validate_environment():
     if os.getenv("GITHUB_REF") != "refs/heads/develop":
         raise RuntimeError("Unexpected branch")
     if os.getenv("PGUSER") != ROLE + ".lfkxwylieimqmusjnxpx":
@@ -122,6 +122,27 @@ def main():
         raise RuntimeError("Unexpected database host")
     if os.getenv("PGSSLMODE") != "verify-full" or not os.path.isfile(os.getenv("PGSSLROOTCERT", "")):
         raise RuntimeError("TLS verification required")
+
+
+
+def cleanup_preview():
+    validate_environment()
+    data = json.loads(db("SELECT bakery_dev.cleanup_notification_history(true);"))
+    if not isinstance(data, dict) or data.get("dry_run") is not True:
+        raise RuntimeError("Unexpected cleanup response")
+    for key in ("deliveries", "devices"):
+        if type(data.get(key)) is not int or data[key] < 0:
+            raise RuntimeError("Unexpected cleanup count")
+    print("Cleanup preview: " + json.dumps(data), flush=True)
+    return 0
+
+
+def main():
+    validate_environment()
+    if sys.argv[1:] == ["--cleanup-preview"]:
+        return cleanup_preview()
+    if sys.argv[1:]:
+        raise RuntimeError("Unexpected argument")
     access_token = os.environ.pop("FCM_ACCESS_TOKEN", "")
     if not access_token:
         raise RuntimeError("Missing FCM access token")
