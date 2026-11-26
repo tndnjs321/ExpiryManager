@@ -41,8 +41,10 @@ jobs:
           access_token_lifetime: 600s
           create_credentials_file: false
           export_environment_variables: false
-      - name: Check dispatch script syntax
-        run: python3 -m py_compile scripts/notify-prod.py
+      - name: Validate notification scripts and offline FCM error handling
+        run: |
+          python3 -m py_compile scripts/notify-prod.py scripts/notify-system-prod.py scripts/test-fcm-prod.py
+          python3 scripts/test-fcm-prod.py
       - name: Claim and dispatch due production notifications
         env:
           PGHOST: ${{ secrets.DB_HOST }}
