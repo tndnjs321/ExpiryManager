@@ -1,0 +1,46 @@
+name: Production notification history cleanup
+
+on:
+  schedule:
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+    inputs:
+      commit_cleanup:
+        description: 'Delete notification history and inactive devices older than 90 days (manual runs only)'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bakery-production-notify-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate notification script
+        run: python3 -m py_compile scripts/notify-prod.py
+      - name: Apply notification retention policy
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.PROD_NOTIFY_DB_USER }}
+          PGPASSWORD: ${{ secrets.PROD_NOTIFY_DB_PASSWORD }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGCONNECT_TIMEOUT: '20'
+          CLEANUP_ARGUMENT: ${{ (github.event_name == 'schedule' || inputs.commit_cleanup == true) && '--cleanup-commit' || '--cleanup-preview' }}
+        run: |
+          set -euo pipefail
+          export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
+          python3 scripts/notify-prod.py "$CLEANUP_ARGUMENT"
