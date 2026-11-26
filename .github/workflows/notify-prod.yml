@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   id-token: write
 
 concurrency:
@@ -50,3 +51,20 @@ jobs:
           set -euo pipefail
           export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
           python3 scripts/notify-prod.py
+      - name: Report dispatch failure to owner
+        if: ${{ failure() && steps.auth.outcome == 'success' }}
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.PROD_NOTIFY_DB_USER }}
+          PGPASSWORD: ${{ secrets.PROD_NOTIFY_DB_PASSWORD }}
+          FCM_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGCONNECT_TIMEOUT: '20'
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
+          python3 -m py_compile scripts/notify-system-prod.py
+          python3 scripts/notify-system-prod.py dispatch-failure
