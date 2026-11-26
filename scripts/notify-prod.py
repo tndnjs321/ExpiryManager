@@ -1,4 +1,5 @@
 """Production-only FCM dispatch. Claims are committed before any send."""
+import base64
 import json
 import os
 import re
@@ -73,6 +74,44 @@ def still_enabled(row):
     return json.loads(current) == [row["fcm_token"]]
 
 
+def is_unregistered(error):
+    # A generic HTTP 404 is not enough: require the typed FCM error.
+    if error.code != 404:
+        return False
+    try:
+        payload = json.loads(error.read(65536))
+        details = payload["error"]["details"]
+        return isinstance(details, list) and any(
+            isinstance(d, dict)
+            and d.get("@type") == "type.googleapis.com/google.firebase.fcm.v1.FcmError"
+            and d.get("errorCode") == "UNREGISTERED"
+            for d in details
+        )
+    except (OSError, ValueError, KeyError, TypeError, UnicodeError):
+        return False
+
+
+def disable_unregistered(row):
+    device = uuid_value(row["device_id"])
+    store = uuid_value(row["store_id"])
+    token = row["fcm_token"]
+    if not isinstance(token, str) or not token:
+        raise ValueError("Invalid device token")
+    # Encode arbitrary token characters safely; never print SQL or the token.
+    encoded = base64.b64encode(token.encode("utf-8")).decode("ascii")
+    result = db(f"""
+        SELECT bakery.disable_invalid_push_device(
+            '{store}'::uuid, '{device}'::uuid,
+            convert_from(decode('{encoded}', 'base64'), 'UTF8')
+        );
+    """)
+    if result not in ("t", "f"):
+        raise RuntimeError("Unexpected device update response")
+    print("Unregistered device disabled" if result == "t"
+          else "Unregistered token already changed or disabled", flush=True)
+    return result == "t"
+
+
 def finish(row, status):
     if status not in ("sent", "failed", "unknown"):
         raise RuntimeError("Invalid delivery status")
@@ -108,6 +147,9 @@ def send(row, access_token):
         # No automatic retry, even after a definite rejection.
         code = error.code
         print(f"FCM HTTP {code}", flush=True)
+        if is_unregistered(error):
+            disable_unregistered(row)
+            return "unregistered"
         return "failed" if 400 <= code < 500 and code not in (408, 429) else "unknown"
     except (OSError, ValueError):
         return "unknown"
@@ -154,12 +196,12 @@ def main():
 
     rows = claim()
     print(f"New deliveries claimed: {len(rows)}", flush=True)
-    results = {"sent": 0, "failed": 0, "unknown": 0, "record_errors": 0}
+    results = {"sent": 0, "failed": 0, "unknown": 0, "unregistered": 0, "skipped": 0, "record_errors": 0}
     for row in rows:
         status = "unknown"
         try:
             if not still_enabled(row):
-                status = "failed"
+                status = "skipped"
                 print("Device disabled or token changed; skipped", flush=True)
             else:
                 status = send(row, access_token)
@@ -167,7 +209,7 @@ def main():
             print("Delivery precheck or processing failed", flush=True)
         results[status] += 1
         try:
-            finish(row, status)
+            finish(row, "failed" if status in ("unregistered", "skipped") else status)
         except (RuntimeError, ValueError, KeyError, TypeError):
             results["record_errors"] += 1
             print("Could not record final status; claim remains reserved", flush=True)
