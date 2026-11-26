@@ -12,7 +12,10 @@ umask 077
 [[ "$R2_ENDPOINT" =~ ^https://[a-zA-Z0-9.-]+\.r2\.cloudflarestorage\.com/?$ ]] || { echo "Unexpected R2 endpoint format"; exit 1; }
 [[ "$R2_BUCKET_NAME" == "personal-backups" ]] || { echo "Unexpected R2 bucket"; exit 1; }
 export PGPORT=5432 PGDATABASE=postgres PGSSLMODE=verify-full
-export PGSSLROOTCERT=/etc/ssl/certs/ca-certificates.crt PGCONNECT_TIMEOUT=20
+cert_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/certs" && pwd)"
+export PGSSLROOTCERT="$cert_dir/prod-ca-2021.crt" PGCONNECT_TIMEOUT=20
+[[ -s "$PGSSLROOTCERT" ]] || { echo "Supabase CA certificate missing"; exit 1; }
+openssl x509 -in "$PGSSLROOTCERT" -noout -checkend 0 >/dev/null
 export AWS_DEFAULT_REGION=auto AWS_EC2_METADATA_DISABLED=true AWS_PAGER=""
 export AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required
 command -v psql >/dev/null
