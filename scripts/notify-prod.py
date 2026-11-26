@@ -125,22 +125,27 @@ def validate_environment():
 
 
 
-def cleanup_preview():
+def cleanup_history(dry_run=True):
     validate_environment()
-    data = json.loads(db("SELECT bakery.cleanup_notification_history(true);"))
-    if not isinstance(data, dict) or data.get("dry_run") is not True:
+    if type(dry_run) is not bool:
+        raise RuntimeError("Unexpected cleanup mode")
+    sql_mode = "true" if dry_run else "false"
+    data = json.loads(db(f"SELECT bakery.cleanup_notification_history({sql_mode});"))
+    if not isinstance(data, dict) or data.get("dry_run") is not dry_run:
         raise RuntimeError("Unexpected cleanup response")
     for key in ("deliveries", "devices"):
         if type(data.get(key)) is not int or data[key] < 0:
             raise RuntimeError("Unexpected cleanup count")
-    print("Cleanup preview: " + json.dumps(data), flush=True)
+    print(("Cleanup preview: " if dry_run else "Cleanup committed: ") + json.dumps(data), flush=True)
     return 0
 
 
 def main():
     validate_environment()
     if sys.argv[1:] == ["--cleanup-preview"]:
-        return cleanup_preview()
+        return cleanup_history(True)
+    if sys.argv[1:] == ["--cleanup-commit"]:
+        return cleanup_history(False)
     if sys.argv[1:]:
         raise RuntimeError("Unexpected argument")
     access_token = os.environ.pop("FCM_ACCESS_TOKEN", "")
