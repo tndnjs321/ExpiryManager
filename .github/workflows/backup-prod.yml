@@ -1,8 +1,6 @@
 name: Production daily backup and history cleanup
 
 on:
-  schedule:
-    - cron: '7 18 * * *'
   workflow_dispatch:
     inputs:
       healthcheck_test:
