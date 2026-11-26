@@ -1,0 +1,43 @@
+name: Production daily backup and history cleanup
+
+on:
+  schedule:
+    - cron: '7 18 * * *'
+  workflow_dispatch:
+    inputs:
+      commit_cleanup:
+        description: 'Delete eligible processed items after verified backup (manual runs only)'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bakery-production-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate backup script
+        run: bash -n scripts/backup-prod.sh
+      - name: Backup to R2, verify object, then clean eligible history
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.PROD_DB_USER }}
+          PGPASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          CLEANUP_MODE: ${{ (github.event_name == 'schedule' || inputs.commit_cleanup == true) && 'commit' || 'rollback' }}
+        run: bash scripts/backup-prod.sh
