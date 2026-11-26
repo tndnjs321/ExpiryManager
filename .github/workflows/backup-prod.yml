@@ -1,8 +1,15 @@
 name: Production daily backup and history cleanup
 
+run-name: ${{ inputs.automatic_run && 'Cloudflare automatic' || 'Manual' }} - backup-prod
+
 on:
   workflow_dispatch:
     inputs:
+      automatic_run:
+        description: 'Set by the Cloudflare scheduler only'
+        required: false
+        type: boolean
+        default: false
       healthcheck_test:
         description: 'Send monitoring signal for this manual test'
         required: true
@@ -70,6 +77,7 @@ jobs:
           PGDATABASE: postgres
           PGSSLMODE: verify-full
           PGCONNECT_TIMEOUT: '20'
+          AUTOMATIC_RUN: ${{ inputs.automatic_run }}
           BACKUP_OUTCOME: ${{ steps.backup.outcome }}
           BACKUP_VERIFIED: ${{ steps.backup.outputs.backup_verified }}
           SNAPSHOT_STORE: ${{ steps.backup.outputs.snapshot_store }}
@@ -83,7 +91,7 @@ jobs:
           python3 -m py_compile scripts/notify-system-prod.py
           python3 scripts/notify-system-prod.py backup
       - name: Report outcome to Healthchecks
-        if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.healthcheck_test == true) }}
+        if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.automatic_run == true || inputs.healthcheck_test == true) }}
         env:
           HC_URL: ${{ secrets.HC_BACKUP_URL }}
           WORKFLOW_STATUS: ${{ job.status }}

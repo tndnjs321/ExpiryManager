@@ -1,5 +1,7 @@
 """Offline FCM error regression tests. No database or network calls."""
 import io
+import os
+import datetime as dt
 import json
 import pathlib
 import runpy
@@ -84,6 +86,36 @@ class FcmTests(unittest.TestCase):
                 self.assertIn(ROW["device_id"], sql)
                 self.assertIn("c3ludGhldGljLXRlc3QtdG9rZW4=", sql)
                 self.assertNotIn(ROW["fcm_token"], sql)
+
+
+class SchedulerTests(unittest.TestCase):
+    def test_backup_title(self):
+        for flag, title in (("true", "자동 백업 완료"), ("false", "수동 백업 완료")):
+            with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_dispatch",
+                                         "AUTOMATIC_RUN": flag, "BACKUP_VERIFIED": "true",
+                                         "BACKUP_OUTCOME": "success", "CLEANUP_MODE": "commit",
+                                         "SNAPSHOT_STORE": "other"}, clear=True):
+                self.assertEqual(system["message"]("backup", "test")[0], title)
+
+    def test_repeated_automatic_failure(self):
+        fn = system["should_report_dispatch_failure"]
+        stamp = dt.datetime.now(dt.timezone.utc).isoformat()
+        prior = {"id": 1, "event": "workflow_dispatch",
+                 "display_title": "Cloudflare automatic - notify-prod",
+                 "conclusion": "failure", "run_started_at": stamp}
+        for flag, conclusion, expected in (("true", "failure", False),
+                                            ("true", "success", True),
+                                            ("false", "failure", True)):
+            with self.subTest(flag=flag, conclusion=conclusion):
+                prior["conclusion"] = conclusion
+                with patch.dict(os.environ, {"GITHUB_EVENT_NAME": "workflow_dispatch",
+                                             "AUTOMATIC_RUN": flag, "GH_TOKEN": "fake",
+                                             "GITHUB_RUN_ID": "3"}, clear=True), \
+                     patch("urllib.request.urlopen") as urlopen:
+                    urlopen.return_value.__enter__.return_value = io.StringIO(
+                        json.dumps({"workflow_runs": [{"id": 2, "event": "workflow_dispatch",
+                            "display_title": "Manual - notify-prod", "conclusion": "success"}, prior]}))
+                    self.assertEqual(fn(), expected)
 
 
 if __name__ == "__main__":

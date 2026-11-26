@@ -1,8 +1,15 @@
 name: Production notification history cleanup
 
+run-name: ${{ inputs.automatic_run && 'Cloudflare automatic' || 'Manual' }} - notify-cleanup-prod
+
 on:
   workflow_dispatch:
     inputs:
+      automatic_run:
+        description: 'Set by the Cloudflare scheduler only'
+        required: false
+        type: boolean
+        default: false
       healthcheck_test:
         description: 'Send monitoring signal for this manual test'
         required: true
@@ -78,7 +85,7 @@ jobs:
           python3 -m py_compile scripts/notify-system-prod.py
           python3 scripts/notify-system-prod.py cleanup-failure
       - name: Report outcome to Healthchecks
-        if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.healthcheck_test == true) }}
+        if: ${{ !cancelled() && (github.event_name == 'schedule' || inputs.automatic_run == true || inputs.healthcheck_test == true) }}
         env:
           HC_URL: ${{ secrets.HC_CLEANUP_URL }}
           WORKFLOW_STATUS: ${{ job.status }}

@@ -22,10 +22,15 @@ def owner_devices():
     return rows
 
 
+def is_automatic_run():
+    return (os.getenv("GITHUB_EVENT_NAME") == "schedule"
+            or os.getenv("AUTOMATIC_RUN", "").lower() == "true")
+
+
 def should_report_dispatch_failure():
     # Best-effort suppression of repeating failures within the same UTC hour.
     # A new failure following a successful run is always reported.
-    if os.getenv("GITHUB_EVENT_NAME") != "schedule":
+    if not is_automatic_run():
         return True
     token = os.getenv("GH_TOKEN")
     if not token:
@@ -34,7 +39,7 @@ def should_report_dispatch_failure():
         url = ("https://api.github.com/repos/tndnjs321/ExpiryManager/actions/"
                "workflows/notify-prod.yml/runs?"
                + urllib.parse.urlencode({"branch": "main", "status": "completed",
-                                         "event": "schedule", "per_page": 10}))
+                                         "per_page": 30}))
         request = urllib.request.Request(url, headers={
             "Authorization": "Bearer " + token,
             "Accept": "application/vnd.github+json",
@@ -43,7 +48,10 @@ def should_report_dispatch_failure():
         with urllib.request.urlopen(request, timeout=10) as response:
             runs = json.load(response)["workflow_runs"]
         current_id = int(os.environ["GITHUB_RUN_ID"])
-        prior = next((r for r in runs if r["id"] < current_id), None)
+        prior = next((r for r in runs if r["id"] < current_id
+                      and (r.get("event") == "schedule"
+                           or (r.get("event") == "workflow_dispatch"
+                               and r.get("display_title") == "Cloudflare automatic - notify-prod"))), None)
         if prior and prior["conclusion"] == "failure":
             then = dt.datetime.fromisoformat(prior["run_started_at"].replace("Z", "+00:00"))
             now = dt.datetime.now(dt.timezone.utc)
@@ -71,7 +79,7 @@ def message(mode, store):
     mode = os.getenv("CLEANUP_MODE")
     if mode not in ("commit", "rollback"):
         return "백업 결과 확인 오류", "백업 검증 완료. 정리 결과를 확인하지 못했습니다."
-    manual = os.getenv("GITHUB_EVENT_NAME") != "schedule"
+    manual = not is_automatic_run()
     title = "수동 백업 완료" if manual else "자동 백업 완료"
     body = "R2 저장 · 무결성 검사 정상"
     if store == os.getenv("SNAPSHOT_STORE"):
