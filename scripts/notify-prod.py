@@ -172,12 +172,25 @@ def cleanup_history(dry_run=True):
     if type(dry_run) is not bool:
         raise RuntimeError("Unexpected cleanup mode")
     sql_mode = "true" if dry_run else "false"
-    data = json.loads(db(f"SELECT bakery.cleanup_notification_history({sql_mode});"))
-    if not isinstance(data, dict) or data.get("dry_run") is not dry_run:
+    # Both cleanup functions run in the same database transaction.
+    result = json.loads(db(f"""
+        SELECT jsonb_build_object(
+            'notification', bakery.cleanup_notification_history({sql_mode}),
+            'login', bakery.cleanup_login_attempts({sql_mode})
+        );
+    """))
+    if not isinstance(result, dict):
         raise RuntimeError("Unexpected cleanup response")
-    for key in ("deliveries", "devices"):
-        if type(data.get(key)) is not int or data[key] < 0:
-            raise RuntimeError("Unexpected cleanup count")
+    data = {"dry_run": dry_run}
+    for section, keys in (("notification", ("deliveries", "devices")),
+                          ("login", ("login_attempts",))):
+        part = result.get(section)
+        if not isinstance(part, dict) or part.get("dry_run") is not dry_run:
+            raise RuntimeError("Unexpected cleanup response")
+        for key in keys:
+            if type(part.get(key)) is not int or part[key] < 0:
+                raise RuntimeError("Unexpected cleanup count")
+            data[key] = part[key]
     print(("Cleanup preview: " if dry_run else "Cleanup committed: ") + json.dumps(data), flush=True)
     return 0
 
