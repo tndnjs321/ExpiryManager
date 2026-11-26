@@ -5,7 +5,7 @@ const el=id=>document.getElementById(id);
 const status=t=>{el('storeNotifyStatus').textContent=t};
 const categories=[['notify_expired','기한 경과'],['notify_today','오늘까지'],['notify_upcoming','2일 이내 (내일~모레)']];
 let ctx=null,rev=0,busy=false,ready=false,expected=null,drafts=[],dirty=false;
-const rpc=(c,name,args)=>c.client.schema('bakery_dev').rpc(name,args);
+const rpc=(c,name,args)=>c.client.schema('bakery').rpc(name,args);
 const valid=(c,s)=>ctx===c&&rev===s;
 const node=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n};
 function controls(){
