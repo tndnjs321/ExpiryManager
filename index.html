@@ -37,7 +37,7 @@ dialog{width:min(540px,calc(100% - 28px));max-height:85vh;overflow-y:auto;border
 <div id="panelProducts"><div class="stats"><button data-view="active">관리 중<strong id="countActive">0</strong></button><button data-view="expired">기한 경과<strong id="countExpired">0</strong></button><button data-view="today">오늘까지<strong id="countToday">0</strong></button><button data-view="soon">2일 이내<strong id="countSoon">0</strong></button></div>
 <section><h2 id="formTitle">입고 상품 등록</h2><form id="form"><div class="fields"><div id="nameField"><label for="name">상품명 *</label><input id="name" required maxlength="100" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="nameOptions" aria-expanded="false" placeholder="상품명 입력 또는 선택"><div id="nameSuggestions" hidden><div id="nameHeading" class="name-heading">등록된 상품</div><div id="nameOptions" role="listbox" aria-label="등록된 상품명"></div><p id="nameEmpty" hidden>일치하는 상품이 없습니다. 새 상품명으로 등록할 수 있습니다.</p></div></div><label>유통기한 *<input id="expiry" type="date" required></label><label>수량 <small>선택</small><input id="quantity" type="number" min="1" max="999999" step="1" placeholder="미입력 가능"></label><label class="wide">메모 <small>선택</small><input id="note" maxlength="300" placeholder="예: 냉장 쇼케이스 / 진열 위치"></label></div><div class="actions"><button type="submit" class="primary" id="save">등록</button><button type="button" id="cancel" hidden>수정 취소</button></div></form><div id="message" role="status" aria-live="polite"></div></section>
 <section id="productSection"><div class="row"><h2>상품 목록</h2><label>보기<select id="view"><option value="active">관리 중 전체</option><option value="expired">기한 경과</option><option value="today">오늘까지</option><option value="soon">1~2일 이내</option><option value="history">처리 내역</option></select></label></div><label>상품 검색<input id="search" type="search" placeholder="상품명 또는 메모 검색"></label><div id="list"></div></section></div>
-<section id="panelBackup" hidden><div class="row"><div><h2>데이터 백업</h2><div class="muted">매장 DB의 현재 조회 결과를 백업합니다.</div></div><div class="actions"><button id="backup">백업 파일 저장</button><button id="restore">백업 불러오기</button><input type="file" id="file" accept=".json,application/json" hidden></div></div><p id="backupInfo" class="muted"></p><p id="backupStatus" role="status" aria-live="polite"></p><p class="muted">기록은 매장 DB에 저장됩니다. 기존 로컬 기록은 이전하지 않았습니다. 백업 복원은 현재 매장에 없는 기록만 추가하며, 동일 ID의 기존 기록은 유지합니다.</p></section>
+<section id="panelBackup" hidden><div class="row"><div><h2>데이터 백업</h2><div class="muted">매장 DB의 현재 조회 결과를 백업합니다.</div></div><div class="actions"><button id="backup">백업 파일 저장</button><button id="restore">백업 불러오기</button><input type="file" id="file" accept=".json,application/json" hidden></div></div><p id="backupInfo" class="muted"></p><p id="backupStatus" role="status" aria-live="polite"></p><p class="muted">수동 백업 JSON 및 운영 R2 자동 백업 JSON을 지원합니다. 복원은 오너만 가능하며 현재 매장에 없는 기록만 추가합니다. 동일 ID의 기존 기록은 유지합니다. 자동 백업: 매일 03:07 · R2 보관: 90일. 15일이 지난 처리 내역은 복원 후에도 다음 자동 정리 대상입니다.</p></section>
 <section id="panelHistory" hidden><h2>처리 내역 정리</h2><p class="muted">판매완료·폐기 내역 전체를 정리합니다. 관리 중인 상품은 유지합니다.</p><p id="cleanupSummary"></p><button id="reviewCleanup" type="button">처리 내역 전체 정리</button><p id="cleanupResult" role="status" aria-live="polite"></p></section><dialog id="cleanupDialog" aria-labelledby="cleanupTitle"><h2 id="cleanupTitle">처리 내역 정리 확인</h2><p id="cleanupDetails"></p><p>삭제 전 전체 백업 파일을 저장하세요. 정리한 내역은 백업 불러오기로 복원할 수 있습니다.</p><button id="cleanupBackup" type="button">1. 전체 백업 파일 저장</button><label class="backup-check"><input id="cleanupSaved" type="checkbox" disabled>다운로드된 백업 파일이 실제로 저장된 것을 확인했습니다.</label><p class="muted">백업 파일에는 관리 중인 상품과 처리 내역 전체가 포함됩니다. 오래된 백업을 복원하면 정리한 내역이 다시 추가될 수 있습니다.</p><div class="actions"><button id="confirmCleanup" type="button" disabled>2. 확인한 내역 삭제</button><button id="cancelCleanup" type="button">취소</button></div><p id="cleanupMessage" role="status"></p></dialog><section id="panelPush" hidden><div id="pushSection"><h2>푸시 알림 설정</h2><p class="muted">이 기기에 알림을 등록할 수 있습니다. 아이폰은 홈 화면에 추가한 앱에서 실행하세요.</p><div class="actions"><button id="pushEnable" type="button">이 기기 알림 받기</button><button id="pushDisable" type="button" disabled>이 기기 알림 해제</button></div><p id="pushStatus" role="status" aria-live="polite"></p><form id="storeNotifyForm" hidden style="margin-top:24px;border-top:1px solid #dae2ec;padding-top:20px"><h3>매장 자동 알림 설정</h3><label class="backup-check"><input id="storeNotifyEnabled" type="checkbox">매장 자동 알림 사용</label><p class="muted">매장 전체 알림을 끄면 모든 일정의 발송이 중지됩니다. 일정 설정은 유지됩니다.</p><p id="storeNotifyCount" class="muted"></p><div id="storeNotifySchedules"></div><button type="button" id="storeNotifyAdd" style="width:100%;margin-top:12px" disabled>+ 알림 일정 추가</button><div class="actions"><button class="primary" id="storeNotifySave" type="submit" disabled>설정 저장</button><button id="storeNotifyReload" type="button">설정 다시 조회</button></div><p id="storeNotifyStatus" role="status" aria-live="polite"></p><p class="muted">자동 알림은 10분마다 확인합니다. 실행 상황에 따라 수신이 지연되거나 누락될 수 있습니다.</p></form></div></section><footer>포장에 표시된 날짜를 그대로 입력하세요. 날짜만 관리하며 별도 시간 기준은 적용하지 않습니다.</footer><button id="scrollTopBtn" type="button" aria-label="맨 위로 이동" title="맨 위로 이동" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14M12 20V9m-6 6 6-6 6 6"/></svg></button></main>
 <script>
 'use strict';
@@ -67,22 +67,53 @@ function render(){const active=state.items.filter(i=>i.status==='active');$('tod
 $('form').onsubmit=async e=>{e.preventDefault();const name=$('name').value.trim(),expiry=$('expiry').value,q=$('quantity').value,quantity=q===''?null:Number(q),note=$('note').value.trim();if(!name||!validDate(expiry)||!(quantity===null||Number.isSafeInteger(quantity)&&quantity>0&&quantity<=999999)){notify('상품명, 날짜, 수량을 확인하세요.');return}if(remaining(expiry)<0&&!confirm('이미 기한이 지난 날짜입니다. 그대로 저장할까요?'))return;const now=new Date().toISOString(),old=state.items.find(i=>i.id===editing),item={id:old?.id||(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()),name,expiry,quantity,note,status:old?.status||'active',createdAt:old?.createdAt||now,updatedAt:now};if(editing&&(!old||old.updatedAt!==editVersion)){notify('다른 기기에서 변경된 기록입니다. 다시 수정하세요.');reset();return;}if(await mutate(item,old)){reset();render();notify('저장했습니다.');$('name').focus()}};
 $('cancel').onclick=reset;document.querySelectorAll('#appNav [data-panel]').forEach(b=>b.onclick=()=>showPanel(b.dataset.panel));$('view').onchange=render;$('search').oninput=render;document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{$('view').value=b.dataset.view;render();if(b.dataset.view!=='active'){$('name').blur();closeNames();$('productSection').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'})}});
 $('backup').onclick=()=>{if(!ready){backupStatus('기존 데이터 읽기 오류로 백업을 중지했습니다.','error');return}try{const next={...state,lastBackup:new Date().toISOString()},blob=new Blob([JSON.stringify({...next,storeId},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='expiry-backup-'+day()+'.json';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);state.lastBackup=next.lastBackup;render();backupStatus('백업 파일을 생성했습니다. 다운로드 완료 여부를 확인하세요.','success')}catch(e){backupStatus('백업 파일을 만들지 못했습니다.','error')}};
-$('restore').onclick=()=>{if(ready&&!busy&&db)$('file').click();};
+function prepareRestore(raw,s){
+ if(!raw||typeof raw!=='object'||Array.isArray(raw))throw Error('잘못된 백업 파일입니다.');
+ if(raw.format!=='expiry-manager-db-backup'){
+  if(raw.format!=null)throw Error('지원하지 않는 백업 형식입니다.');
+  if(raw.storeId!=null&&raw.storeId!==s)throw Error('다른 매장에서 생성한 백업입니다.');
+  const backup=validate(raw);
+  return {rpc:'restore_backup',backup,count:backup.items.length,label:'수동 백업'};
+ }
+ if(raw.version!==1||raw.environment!=='production')throw Error('운영 환경의 R2 백업 파일만 복원할 수 있습니다.');
+ if(typeof raw.snapshotAt!=='string'||!Number.isFinite(Date.parse(raw.snapshotAt)))throw Error('백업 생성 시각이 잘못되었습니다.');
+ const t=raw.tables;
+ if(!t||!['stores','products','expiry_items'].every(k=>Array.isArray(t[k])))throw Error('잘못된 R2 백업 구조입니다.');
+ const uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v);
+ const ts=v=>typeof v==='string'&&Number.isFinite(Date.parse(v));
+ if(!t.stores.every(v=>v&&uuid(v.id))||!t.stores.some(v=>v.id===s))throw Error('현재 매장의 백업 파일이 아닙니다.');
+ if(![...t.products,...t.expiry_items].every(v=>v&&uuid(v.store_id)))throw Error('매장 식별 정보가 잘못되었습니다.');
+ const stores=t.stores.filter(v=>v.id===s),products=t.products.filter(v=>v.store_id===s),items=t.expiry_items.filter(v=>v.store_id===s);
+ if(stores.length!==1||products.length>50000||items.length>50000)throw Error('복원 가능 건수 또는 매장 정보를 확인하세요.');
+ const productMap=new Map(),names=new Set();
+ for(const p of products){
+  if(!uuid(p.id)||productMap.has(p.id)||typeof p.name!=='string'||!p.name.trim()||p.name.length>100||names.has(p.name)||!ts(p.created_at))throw Error('잘못되거나 중복된 상품 마스터입니다.');
+  productMap.set(p.id,p.name);names.add(p.name);
+ }
+ for(const i of items){
+  if(!productMap.has(i.product_id)||!(i.status==='active'?i.processed_at===null:ts(i.processed_at)))throw Error('상품 연결 또는 처리 시각이 잘못되었습니다.');
+ }
+ validate({version:1,items:items.map(i=>({id:i.id,name:productMap.get(i.product_id),expiry:i.expiry,quantity:i.quantity,note:i.note,status:i.status,createdAt:i.created_at,updatedAt:i.updated_at}))});
+ return {rpc:'restore_r2_backup',backup:{format:raw.format,version:raw.version,environment:raw.environment,snapshotAt:raw.snapshotAt,tables:{stores,products,expiry_items:items}},count:items.length,products:products.length,label:'R2 자동 백업'};
+}
+$('restore').onclick=()=>{if(currentRole==='owner'&&ready&&!busy&&db)$('file').click();};
 $('file').onchange=async e=>{
- const f=e.target.files[0];e.target.value='';if(!f||!ready||busy||!db)return;
+ const f=e.target.files[0];e.target.value='';if(!f||!ready||busy||!db||currentRole!=='owner')return;
  const g=generation,c=db,s=storeId;busy=true;$('restore').disabled=true;
  let committed=false;backupStatus('백업 파일 확인 중…');
  try{
   if(f.size>20000000)throw Error('20MB 이하의 백업 파일을 선택하세요.');
-  const raw=JSON.parse(await f.text()),backup=validate(raw);
-  if(g!==generation)return;
-  if(raw.storeId!=null&&raw.storeId!==s)throw Error('다른 매장에서 생성한 백업입니다.');
-  if(!confirm('복원 대상: '+$('authStore').textContent+'\n백업 '+backup.items.length+'건을 검사합니다. 기존 ID는 유지하고 없는 기록만 추가합니다. 계속할까요?')){backupStatus('복원을 취소했습니다.');return;}
+  const raw=JSON.parse(await f.text()),plan=prepareRestore(raw,s);
+  if(g!==generation||currentRole!=='owner')return;
+  const details=plan.rpc==='restore_r2_backup'?'\n상품 마스터 '+plan.products+'건 · 생성 '+new Date(raw.snapshotAt).toLocaleString('ko-KR'):'';
+  if(!confirm('복원 대상: '+$('authStore').textContent+'\n파일 유형: '+plan.label+details+'\n유통기한 기록 '+plan.count+'건을 검사합니다. 기존 기록은 유지하고 없는 기록만 추가합니다. 계속할까요?')){backupStatus('복원을 취소했습니다.');return;}
+  if(g!==generation||currentRole!=='owner')return;
   backupStatus('DB 복원 중…');
-  const {data,error}=await c.schema('bakery').rpc('restore_backup',{p_store_id:s,p_backup:backup});
+  const {data,error}=await c.schema('bakery').rpc(plan.rpc,{p_store_id:s,p_backup:plan.backup});
   if(error)throw error;committed=true;if(g!==generation)return;
   reset();await loadDB();if(g!==generation)return;
-  backupStatus('복원 완료: 신규 '+data.inserted+'건, 기존 유지 '+data.skipped+'건','success');
+  const extra=plan.rpc==='restore_r2_backup'?', 상품 마스터 신규 '+data.products_inserted+'건':'';
+  backupStatus('복원 완료: 신규 '+data.inserted+'건, 기존 유지 '+data.skipped+'건'+extra,'success');
  }catch(err){if(g===generation){if(committed)ready=false;backupStatus(committed?'복원은 완료됐지만 재조회에 실패했습니다. 새로고침하세요.':'복원 실패: '+err.message,'error');}}
  finally{if(g===generation){busy=false;$('restore').disabled=false;}}
 };
