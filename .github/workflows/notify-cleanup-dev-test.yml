@@ -1,0 +1,40 @@
+name: Development notification cleanup preview
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/notify-cleanup-dev-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bakery-dev-notify-cleanup
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout development source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check script syntax
+        run: python3 -m py_compile scripts/notify-dev.py
+      - name: Preview expired notification records without deleting
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.NOTIFY_DB_USER }}
+          PGPASSWORD: ${{ secrets.NOTIFY_DB_PASSWORD }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGCONNECT_TIMEOUT: '20'
+        run: |
+          set -euo pipefail
+          export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
+          python3 scripts/notify-dev.py --cleanup-preview
