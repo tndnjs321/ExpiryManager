@@ -1,8 +1,6 @@
 name: Production notification history cleanup
 
 on:
-  schedule:
-    - cron: '30 18 * * *'
   workflow_dispatch:
     inputs:
       healthcheck_test:
