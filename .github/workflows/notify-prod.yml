@@ -2,6 +2,8 @@ name: Production expiry notification dispatch
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '9-59/10 * * * *'
 
 permissions:
   contents: read
@@ -12,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  dispatch-test:
+  dispatch:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 8
