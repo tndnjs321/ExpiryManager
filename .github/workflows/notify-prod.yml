@@ -1,0 +1,50 @@
+name: Production expiry notification dispatch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: bakery-production-notify-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch-test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Authenticate to Google Cloud without service account key
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/387988934070/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: notification-sender@personal-notifications-ed12b.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
+          access_token_lifetime: 600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Check dispatch script syntax
+        run: python3 -m py_compile scripts/notify-prod.py
+      - name: Claim and dispatch due production notifications
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.PROD_NOTIFY_DB_USER }}
+          PGPASSWORD: ${{ secrets.PROD_NOTIFY_DB_PASSWORD }}
+          FCM_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGCONNECT_TIMEOUT: '20'
+        run: |
+          set -euo pipefail
+          export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
+          python3 scripts/notify-prod.py
