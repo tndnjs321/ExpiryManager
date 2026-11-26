@@ -5,6 +5,7 @@ import os
 import pathlib
 import runpy
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 
@@ -98,9 +99,16 @@ def send(row, title, body, token):
         headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=15) as response:
-        result = json.load(response)
-    return isinstance(result, dict) and bool(result.get("name"))
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            result = json.load(response)
+        return "sent" if isinstance(result, dict) and result.get("name") else "failed"
+    except urllib.error.HTTPError as error:
+        print(f"System FCM HTTP {error.code}", flush=True)
+        if notify["is_unregistered"](error):
+            notify["disable_unregistered"](row)
+            return "unregistered"
+        return "failed"
 
 
 def main():
@@ -118,7 +126,7 @@ def main():
     notify["DB_ENV"].pop("GH_TOKEN", None)
     rows = owner_devices()
     seen = set()
-    sent = failed = skipped = 0
+    sent = failed = skipped = unregistered = 0
     for row in rows:
         device = row["device_id"]
         if device in seen:
@@ -130,13 +138,16 @@ def main():
                 skipped += 1
                 continue
             title, body = message(mode, row["store_id"])
-            if send(row, title, body, token):
+            outcome = send(row, title, body, token)
+            if outcome == "sent":
                 sent += 1
+            elif outcome == "unregistered":
+                unregistered += 1
             else:
                 failed += 1
         except (OSError, ValueError, KeyError, TypeError, RuntimeError):
             failed += 1
-    print(f"Owner system alerts: sent={sent}, failed={failed}, skipped={skipped}", flush=True)
+    print(f"Owner system alerts: sent={sent}, failed={failed}, skipped={skipped}, unregistered={unregistered}", flush=True)
     if not rows:
         print("No enabled owner devices", flush=True)
     return int(failed > 0)
