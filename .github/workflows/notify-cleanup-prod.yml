@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
       commit_cleanup:
-        description: 'Delete notification history and inactive devices older than 90 days (manual runs only)'
+        description: 'Delete notification history and inactive devices older than 90 days and login attempts older than 7 days (manual runs only)'
         required: true
         type: boolean
         default: false
@@ -37,7 +37,7 @@ jobs:
           persist-credentials: false
       - name: Validate notification script
         run: python3 -m py_compile scripts/notify-prod.py
-      - name: Apply notification retention policy
+      - name: Apply notification and login retention policies
         env:
           PGHOST: ${{ secrets.DB_HOST }}
           PGUSER: ${{ secrets.PROD_NOTIFY_DB_USER }}
