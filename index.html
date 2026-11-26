@@ -25,7 +25,7 @@ dialog{width:min(540px,calc(100% - 28px));max-height:85vh;overflow-y:auto;border
 </style>
 
 <style>[hidden]{display:none!important}#authGate{max-width:480px;margin:auto;padding:24px 14px}#authGate label{margin:12px 0}#authGate input{margin-top:6px}#authGate button{width:100%;margin-top:8px}#authBar{margin-top:14px;padding:12px;border:1px solid #dae2ec;border-radius:9px;background:#fff}</style>
-<div id="authGate"><section><h1>유통기한 관리</h1><p class="muted">개발 환경 · 로그인</p><form id="authForm" hidden><label>이메일<input id="authEmail" type="email" autocomplete="username" required></label><label>비밀번호<input id="authPassword" type="password" autocomplete="current-password" required></label><button class="primary" id="authSubmit">로그인</button></form><p id="authStatus" role="status">연결 확인 중…</p><button id="authExit" hidden>로그아웃</button></section></div>
+<div id="authGate"><section><h1>유통기한 관리</h1><p class="muted">개발 환경 · 로그인</p><form id="authForm" hidden><label>아이디<input id="authEmail" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="휴대전화 번호 또는 이메일" required></label><label>비밀번호<input id="authPassword" type="password" autocomplete="current-password" required></label><button class="primary" id="authSubmit">로그인</button></form><p id="authStatus" role="status">연결 확인 중…</p><button id="authExit" hidden>로그아웃</button></section></div>
 <main id="appMain" hidden inert><header><div><span class="muted">BAKERY · STORE TOOLS</span><h1>유통기한 관리</h1><div id="today" class="muted"></div></div><button id="add" class="primary">상품 등록</button></header><div id="authBar" class="row"><div><strong id="authStore"></strong><div class="muted">개발용 · 상품 데이터는 이 브라우저에만 저장됩니다.</div></div><button id="appLogout">로그아웃</button></div>
 <div class="stats"><button data-view="active">관리 중<strong id="countActive">0</strong></button><button data-view="expired">기한 경과<strong id="countExpired">0</strong></button><button data-view="today">오늘까지<strong id="countToday">0</strong></button><button data-view="soon">2일 이내<strong id="countSoon">0</strong></button></div>
 <section><h2 id="formTitle">입고 상품 등록</h2><form id="form"><div class="fields"><div id="nameField"><label for="name">상품명 *</label><input id="name" required maxlength="100" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="nameOptions" aria-expanded="false" placeholder="상품명 입력 또는 선택"><div id="nameSuggestions" hidden><div id="nameHeading" class="name-heading">등록된 상품</div><div id="nameOptions" role="listbox" aria-label="등록된 상품명"></div><p id="nameEmpty" hidden>일치하는 상품이 없습니다. 새 상품명으로 등록할 수 있습니다.</p></div></div><label>유통기한 *<input id="expiry" type="date" required></label><label>수량 <small>선택</small><input id="quantity" type="number" min="1" max="999999" step="1" placeholder="미입력 가능"></label><label class="wide">메모 <small>선택</small><input id="note" maxlength="300" placeholder="예: 냉장 쇼케이스 / 진열 위치"></label></div><div class="actions"><button type="submit" class="primary" id="save">등록</button><button type="button" id="cancel" hidden>수정 취소</button></div></form><div id="message" role="status" aria-live="polite"></div></section>
@@ -91,7 +91,7 @@ function clearUI(){if(el('cleanupDialog').open)el('cleanupDialog').close();reset
 async function inspect(session,seq){
  if(seq!==revision)return;
  el('authForm').hidden=!!session;el('authExit').hidden=!session;
- if(!session){authorizedUser=null;hide();msg('이메일과 비밀번호를 입력하세요.');return;}
+ if(!session){authorizedUser=null;hide();msg('휴대전화 번호 또는 이메일과 비밀번호를 입력하세요.');return;}
  msg('매장 접근 권한 확인 중…');
  try{
   const {data,error}=await client.schema('bakery_dev').from('store_members').select('role, stores(id,name)').eq('user_id',session.user.id);
@@ -113,7 +113,7 @@ client.auth.onAuthStateChange((event,session)=>{
 });
 el('authForm').onsubmit=async e=>{
  e.preventDefault();el('authSubmit').disabled=true;msg('로그인 중…');
- try{const {error}=await client.auth.signInWithPassword({email:el('authEmail').value.trim(),password:el('authPassword').value});if(error)msg('로그인 실패: '+error.message);}
+ try{const id=el('authEmail').value.trim();const password=el('authPassword').value;let credentials;if(id.includes('@')){credentials={email:id,password};}else{const phone=id.replace(/[\s-]/g,'');const normalized=/^010\d{8}$/.test(phone)?'+82'+phone.slice(1):phone;if(!/^\+8210\d{8}$/.test(normalized)){msg('올바른 휴대전화 번호 또는 이메일을 입력하세요.');return;}credentials={phone:normalized,password};}const {error}=await client.auth.signInWithPassword(credentials);if(error)msg('로그인 실패: '+error.message);}
  catch(e){msg('로그인 연결 오류: '+e.message);}
  finally{el('authPassword').value='';el('authSubmit').disabled=false;}
 };
