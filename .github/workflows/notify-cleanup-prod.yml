@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: bakery-production-notify-cleanup
@@ -25,6 +26,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout production source
+        id: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -44,3 +46,31 @@ jobs:
           set -euo pipefail
           export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
           python3 scripts/notify-prod.py "$CLEANUP_ARGUMENT"
+      - name: Authenticate to Google Cloud without service account key
+        id: auth
+        if: ${{ failure() && steps.checkout.outcome == 'success' }}
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/387988934070/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: notification-sender@personal-notifications-ed12b.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
+          access_token_lifetime: 600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Report retention cleanup failure to owner
+        if: ${{ failure() && steps.auth.outcome == 'success' }}
+        env:
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.PROD_NOTIFY_DB_USER }}
+          PGPASSWORD: ${{ secrets.PROD_NOTIFY_DB_PASSWORD }}
+          FCM_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGCONNECT_TIMEOUT: '20'
+        run: |
+          set -euo pipefail
+          export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
+          python3 -m py_compile scripts/notify-system-prod.py
+          python3 scripts/notify-system-prod.py cleanup-failure
