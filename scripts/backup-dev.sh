@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-# Snapshot is read-only. The cleanup integration test always rolls back.
+# Read-only snapshot, rollback test, and narrowly scoped fixture-only commit test.
 [[ "${GITHUB_REF:-}" == "refs/heads/develop" ]] || { echo "Refusing non-develop execution"; exit 1; }
 : "${PGHOST:?Missing DB_HOST}" "${PGUSER:?Missing DB_USER}" "${PGPASSWORD:?Missing DB_PASSWORD}"
 : "${AWS_ACCESS_KEY_ID:?Missing R2_ACCESS_KEY_ID}" "${AWS_SECRET_ACCESS_KEY:?Missing R2_SECRET_ACCESS_KEY}"
@@ -148,8 +148,91 @@ if ! psql -X -qAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose \
     grep -oE 'ERROR:  [0-9A-Z]{5}:' "$tmp/cleanup-error" | head -n 1 || true
     exit 1
 fi
-unset PGPASSWORD
 count="$(cat "$tmp/cleanup-result")"
 [[ "$count" =~ ^[0-9]+$ ]] && [[ "$count" -le "$(cat "$tmp/count")" ]] || { echo "Unexpected cleanup result"; exit 1; }
 echo "Cleanup integration test succeeded; matched records: $count"
 echo "ROLLBACK completed. No database records were deleted."
+
+# One-time commit test: only the five explicitly created development fixtures.
+# Never commit deletion of ordinary inventory in this test workflow.
+python3 - "$tmp/verified.json" "$tmp/fixture-test.sql" <<'PY'
+import base64
+import datetime as dt
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as f:
+    backup = json.load(f)
+store = "2c2fc998-349d-4633-9163-166033975a1c"
+products = {
+    p["id"] for p in backup["tables"]["products"]
+    if p["store_id"] == store and p["name"] == "자동정리 검증용 상품"
+}
+fixtures = [
+    e for e in backup["tables"]["expiry_items"]
+    if e["store_id"] == store and e["product_id"] in products
+    and e["id"].startswith("auto-test-")
+]
+expected_delete = {"16일 전 판매완료": "sold", "16일 전 폐기": "discarded"}
+expected_keep = {"14일 전 판매완료": "sold", "14일 전 폐기": "discarded", "관리 중 유지": "active"}
+actual = {e["note"]: e["status"] for e in fixtures}
+if len(fixtures) == 3 and actual == expected_keep:
+    print("Fixture commit test already completed; skipping")
+    sys.exit(0)
+if not fixtures:
+    print("No test fixtures; skipping commit test")
+    sys.exit(0)
+if len(products) != 1 or len(fixtures) != 5 or actual != (expected_delete | expected_keep):
+    raise ValueError("Unexpected test fixture set; no deletion committed")
+snapshot = dt.datetime.fromisoformat(backup["snapshotAt"].replace("Z", "+00:00"))
+cutoff = snapshot - dt.timedelta(hours=360)
+targets = [e for e in fixtures if e["note"] in expected_delete]
+keepers = [e for e in fixtures if e["note"] in expected_keep]
+assert all(e["processed_at"] and dt.datetime.fromisoformat(e["processed_at"].replace("Z", "+00:00")) <= cutoff for e in targets)
+assert all((e["status"] == "active" and e["processed_at"] is None) or (e["status"] != "active" and e["processed_at"] and dt.datetime.fromisoformat(e["processed_at"].replace("Z", "+00:00")) > cutoff) for e in keepers)
+payload = base64.b64encode(json.dumps({
+    "snapshotAt": backup["snapshotAt"], "targets": targets,
+    "keepers": [e["id"] for e in keepers], "store": store
+}, ensure_ascii=False).encode("utf-8")).decode("ascii")
+sql = """BEGIN;
+SET LOCAL statement_timeout = '120s';
+SET LOCAL search_path = pg_catalog;
+DO $fixture$
+DECLARE
+    b jsonb := convert_from(decode('%s', 'base64'), 'UTF8')::jsonb;
+    n integer;
+BEGIN
+    n := bakery_dev.cleanup_history_auto((b->>'snapshotAt')::timestamptz,b->'targets');
+    IF n <> 2 THEN
+        RAISE EXCEPTION 'Expected exactly two fixture deletions';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM bakery_dev.expiry_items e
+        WHERE e.store_id = (b->>'store')::uuid
+          AND e.id IN (SELECT x->>'id' FROM jsonb_array_elements(b->'targets') x)
+    ) THEN
+        RAISE EXCEPTION 'Deleted fixture still exists';
+    END IF;
+    IF (SELECT count(*) FROM bakery_dev.expiry_items e
+        WHERE e.store_id = (b->>'store')::uuid
+          AND e.id IN (SELECT jsonb_array_elements_text(b->'keepers'))) <> 3 THEN
+        RAISE EXCEPTION 'Expected three preserved fixtures';
+    END IF;
+END
+$fixture$;
+COMMIT;
+""" % payload
+with open(sys.argv[2], "w", encoding="utf-8") as f:
+    f.write(sql)
+PY
+if [[ -s "$tmp/fixture-test.sql" ]]; then
+    echo "Running commit test restricted to two development fixtures"
+    if ! psql -X -qAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose \
+        < "$tmp/fixture-test.sql" > "$tmp/fixture-result" 2> "$tmp/fixture-error"; then
+        echo "Fixture commit test failed; transaction was not committed."
+        grep -oE 'ERROR:  [0-9A-Z]{5}:' "$tmp/fixture-error" | head -n 1 || true
+        exit 1
+    fi
+    echo "Fixture COMMIT succeeded: 2 deleted, 3 preserved"
+fi
+unset PGPASSWORD
