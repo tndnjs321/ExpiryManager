@@ -139,7 +139,6 @@ function renderOwnerDbUsage(result){
  ownerRow(target,'개발 스키마',mb(d.dev_bytes));
  ownerRow(target,'기타 및 시스템',mb(d.total_bytes-d.prod_bytes-d.dev_bytes));
  ownerRow(target,'남은 무료 용량',mb(Math.max(0,limit-d.total_bytes)));
- ownerRow(target,'90일 후 예상 사용량',ownerIsNumber(result.value.usage_history?.forecast_90_bytes)?mb(result.value.usage_history.forecast_90_bytes):'산정 전 · 증가량 자료 필요');
 }
 function renderOwnerR2Usage(result){
  const target=$('ownerR2Usage');target.replaceChildren();
@@ -203,6 +202,22 @@ function ownerSum(rows,key){
  if(!Array.isArray(rows)||!rows.length||!rows.every(r=>ownerIsNumber(r?.[key])))return null;
  return rows.reduce((sum,r)=>sum+r[key],0);
 }
+function renderOwnerFunctionStats(target,label,rows){
+ const heading=node('h4',label);heading.style.cssText='margin:16px 0 4px;overflow-wrap:anywhere';target.append(heading);
+ if(!Array.isArray(rows)){target.append(node('p','조회 불가','muted'));return;}
+ if(!rows.length){target.append(node('p','응답 기록 없음','muted'));return;}
+ const timestamps=rows.map(r=>r?.timestamp).filter(v=>typeof v==='string'&&Number.isFinite(Date.parse(v))).sort((a,b)=>Date.parse(a)-Date.parse(b));
+ if(timestamps.length)ownerRow(target,'반환 집계 시각',ownerAnalyticsTime(timestamps[0])+(timestamps.length>1?' ~ '+ownerAnalyticsTime(timestamps[timestamps.length-1]):''));
+ const count=ownerSum(rows,'request_count'),success=ownerSum(rows,'success_count'),client=ownerSum(rows,'client_err_count'),server=ownerSum(rows,'server_err_count'),redirect=ownerSum(rows,'redirect_count'),logs=ownerSum(rows,'log_error_count');
+ ownerRow(target,'함수 요청',ownerNumber(count,'회'));
+ ownerRow(target,'성공',ownerNumber(success,'회'));
+ ownerRow(target,'HTTP 4xx 오류',ownerNumber(client,'회'),client>0?'amber':undefined);
+ ownerRow(target,'HTTP 5xx 오류',ownerNumber(server,'회'),server>0?'red':undefined);
+ ownerRow(target,'리다이렉트',ownerNumber(redirect,'회'));
+ const validRate=count>0&&ownerIsNumber(client)&&ownerIsNumber(server)&&client+server<=count;
+ ownerRow(target,'HTTP 오류율',validRate?((client+server)/count*100).toFixed(2)+'%':count===0?'요청 없음':'확인 불가',validRate&&client+server>0?'amber':undefined);
+ ownerRow(target,'오류 로그',ownerNumber(logs,'건'),logs>0?'amber':undefined);
+}
 function renderOwnerExtra(result){
  const data=result.status==='fulfilled'?result.value:null;
  for(const id of ['ownerHealthSummary','ownerSbAnalytics','ownerForecast','ownerGithub','ownerPush','ownerTokenExpiry'])$(id).replaceChildren();
@@ -220,13 +235,13 @@ function renderOwnerExtra(result){
  const rows=a.api_counts;
  for(const [label,key] of [['Auth 요청','total_auth_requests'],['REST 요청','total_rest_requests'],['Realtime 요청','total_realtime_requests'],['Storage 요청','total_storage_requests']])ownerRow(s,label,ownerNumber(ownerSum(rows,key),'회'));
  const ts=Array.isArray(rows)?rows.map(r=>r?.timestamp).filter(v=>typeof v==='string'&&Number.isFinite(Date.parse(v))).sort((a,b)=>Date.parse(a)-Date.parse(b)):[];
- if(ts.length)ownerRow(s,'API 집계 시각 범위',ownerAnalyticsTime(ts[0])+' ~ '+ownerAnalyticsTime(ts[ts.length-1]));
- ownerRow(s,'API 요청 집계',ownerNumber(Array.isArray(a.request_count)&&a.request_count.length===1?a.request_count[0]?.count:null,'회'));
+ if(ts.length)ownerRow(s,'종류별 API 반환 집계 시각',ownerAnalyticsTime(ts[0])+' ~ '+ownerAnalyticsTime(ts[ts.length-1]));
+ ownerRow(s,'별도 API 요청 집계',ownerNumber(Array.isArray(a.request_count)&&a.request_count.length===1?a.request_count[0]?.count:null,'회'));
+ s.append(node('p','별도 API 집계의 조회 기간·범위는 확인되지 않았으므로 위 종류별 합계와 직접 비교하지 않습니다.','muted'));
  for(const [label,key] of [['bakery-login','login'],['bakery-owner-monitor','owner_monitor']]){
- const values=a.functions?.[key];
- ownerRow(s,label,Array.isArray(values)?(values.length?'응답 수신 · 집계 검증 전':'응답 수신 · 기록 없음'):'조회 불가');
+ renderOwnerFunctionStats(s,label,a.functions?.[key]);
  }
- ownerRow(s,'bakery-dev-login','함수 ID 미확인 · 제외');
+ s.append(node('p','함수별 API 반환 데이터 기준입니다. 오류율은 (HTTP 4xx + 5xx) / 함수 요청 수이며 오류 로그 건수와 별개입니다. 월간 전체 함수 과금 호출량은 아닙니다.','muted'));
  }
  const history=data?.usage_history;
  if(!history)f.textContent='조회 불가';else{
