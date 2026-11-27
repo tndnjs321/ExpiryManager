@@ -38,7 +38,7 @@ dialog{width:min(540px,calc(100% - 28px));max-height:85vh;overflow-y:auto;border
 <section><h2 id="formTitle">입고 상품 등록</h2><form id="form"><div class="fields"><div id="nameField"><label for="name">상품명 *</label><input id="name" required maxlength="100" autocomplete="off" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="nameOptions" aria-expanded="false" placeholder="상품명 입력 또는 선택"><div id="nameSuggestions" hidden><div id="nameHeading" class="name-heading">등록된 상품</div><div id="nameOptions" role="listbox" aria-label="등록된 상품명"></div><p id="nameEmpty" hidden>일치하는 상품이 없습니다. 새 상품명으로 등록할 수 있습니다.</p></div></div><label>유통기한 *<input id="expiry" type="date" required></label><label>수량 <small>선택</small><input id="quantity" type="number" min="1" max="999999" step="1" placeholder="미입력 가능"></label><label class="wide">메모 <small>선택</small><input id="note" maxlength="300" placeholder="예: 냉장 쇼케이스 / 진열 위치"></label></div><div class="actions"><button type="submit" class="primary" id="save">등록</button><button type="button" id="cancel" hidden>수정 취소</button></div></form><div id="message" role="status" aria-live="polite"></div></section>
 <section id="productSection"><div class="row"><h2>상품 목록</h2><label>보기<select id="view"><option value="active">관리 중 전체</option><option value="expired">기한 경과</option><option value="today">오늘까지</option><option value="soon">1~2일 이내</option><option value="history">처리 내역</option></select></label></div><label>상품 검색<input id="search" type="search" placeholder="상품명 또는 메모 검색"></label><div id="list"></div></section></div>
 <section id="panelBackup" hidden><div class="row"><div><h2>데이터 백업</h2><div class="muted">매장 DB의 현재 조회 결과를 백업합니다.</div></div><div class="actions"><button id="backup">백업 파일 저장</button><button id="restore">백업 불러오기</button><input type="file" id="file" accept=".json,application/json" hidden></div></div><p id="backupInfo" class="muted"></p><p id="backupStatus" role="status" aria-live="polite"></p><p class="muted">수동 백업 JSON 및 운영 R2 자동 백업 JSON을 지원합니다. 복원은 오너 및 관리자만 가능하며 현재 매장에 없는 기록만 추가합니다. 동일 ID의 기존 기록은 유지합니다. 자동 백업: 매일 03:07 · R2 보관: 90일. 15일이 지난 처리 내역은 복원 후에도 다음 자동 정리 대상입니다.</p></section>
-<section id="panelHistory" hidden><h2>처리 내역 정리</h2><p class="muted">판매완료·폐기 내역 전체를 정리합니다. 관리 중인 상품은 유지합니다.</p><p id="cleanupSummary"></p><button id="reviewCleanup" type="button">처리 내역 전체 정리</button><p id="cleanupResult" role="status" aria-live="polite"></p></section><dialog id="cleanupDialog" aria-labelledby="cleanupTitle"><h2 id="cleanupTitle">처리 내역 정리 확인</h2><p id="cleanupDetails"></p><p>삭제 전 전체 백업 파일을 저장하세요. 정리한 내역은 백업 불러오기로 복원할 수 있습니다.</p><button id="cleanupBackup" type="button">1. 전체 백업 파일 저장</button><label class="backup-check"><input id="cleanupSaved" type="checkbox" disabled>다운로드된 백업 파일이 실제로 저장된 것을 확인했습니다.</label><p class="muted">백업 파일에는 관리 중인 상품과 처리 내역 전체가 포함됩니다. 오래된 백업을 복원하면 정리한 내역이 다시 추가될 수 있습니다.</p><div class="actions"><button id="confirmCleanup" type="button" disabled>2. 확인한 내역 삭제</button><button id="cancelCleanup" type="button">취소</button></div><p id="cleanupMessage" role="status"></p></dialog><section id="panelPush" hidden><div id="pushSection"><h2>푸시 알림 설정</h2><p class="muted">이 기기에 알림을 등록할 수 있습니다. 아이폰은 홈 화면에 추가한 앱에서 실행하세요.</p><div class="actions"><button id="pushEnable" type="button">이 기기 알림 받기</button><button id="pushDisable" type="button" disabled>이 기기 알림 해제</button></div><p id="pushStatus" role="status" aria-live="polite"></p><form id="storeNotifyForm" hidden style="margin-top:24px;border-top:1px solid #dae2ec;padding-top:20px"><h3>매장 자동 알림 설정</h3><label class="backup-check"><input id="storeNotifyEnabled" type="checkbox">매장 자동 알림 사용</label><p class="muted">매장 전체 알림을 끄면 모든 일정의 발송이 중지됩니다. 일정 설정은 유지됩니다.</p><p id="storeNotifyCount" class="muted"></p><div id="storeNotifySchedules"></div><button type="button" id="storeNotifyAdd" style="width:100%;margin-top:12px" disabled>+ 알림 일정 추가</button><div class="actions"><button class="primary" id="storeNotifySave" type="submit" disabled>설정 저장</button><button id="storeNotifyReload" type="button">설정 다시 조회</button></div><p id="storeNotifyStatus" role="status" aria-live="polite"></p><p class="muted">자동 알림은 10분마다 확인합니다. 실행 상황에 따라 수신이 지연되거나 누락될 수 있습니다.</p></form></div></section><section id="panelOwner" hidden><div class="row"><h2>운영 관리</h2><button id="ownerRefresh" type="button">새로고침</button></div><p class="muted" id="ownerUpdated" role="status">조회 전</p><h3>자동화 상태</h3><div id="ownerRuns"></div><p class="muted">GitHub 실행 결과 기준이며 실제 푸시 수신이나 백업 파일 보존을 보장하지 않습니다.</p><h3>Healthchecks 장애 감시</h3><div id="ownerHealth" role="status" aria-live="polite"></div><p class="muted">Healthchecks 수신 신호 기준이며 실제 작업 결과를 보장하지 않습니다.</p><h3>매장 운영 현황</h3><div id="ownerCounts"></div><h3>유지보수</h3><p>GitHub 실행 토큰 등록 만료일: 2027-02-24 (갱신 시 수정 필요)</p><p>상품 처리 이력 15일 · R2 백업 90일 · 알림 이력 90일 · 로그인 시도 7일</p><h3>서비스 사용량 및 상세 관리</h3><p class="muted">전체 서비스 합산 사용량 및 R2 파일 목록은 아래 관리 페이지에서 확인하세요. 사용량 자동 연동 전입니다.</p><div id="ownerLinks"></div></section><footer>포장에 표시된 날짜를 그대로 입력하세요. 날짜만 관리하며 별도 시간 기준은 적용하지 않습니다.</footer><button id="scrollTopBtn" type="button" aria-label="맨 위로 이동" title="맨 위로 이동" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14M12 20V9m-6 6 6-6 6 6"/></svg></button></main>
+<section id="panelHistory" hidden><h2>처리 내역 정리</h2><p class="muted">판매완료·폐기 내역 전체를 정리합니다. 관리 중인 상품은 유지합니다.</p><p id="cleanupSummary"></p><button id="reviewCleanup" type="button">처리 내역 전체 정리</button><p id="cleanupResult" role="status" aria-live="polite"></p></section><dialog id="cleanupDialog" aria-labelledby="cleanupTitle"><h2 id="cleanupTitle">처리 내역 정리 확인</h2><p id="cleanupDetails"></p><p>삭제 전 전체 백업 파일을 저장하세요. 정리한 내역은 백업 불러오기로 복원할 수 있습니다.</p><button id="cleanupBackup" type="button">1. 전체 백업 파일 저장</button><label class="backup-check"><input id="cleanupSaved" type="checkbox" disabled>다운로드된 백업 파일이 실제로 저장된 것을 확인했습니다.</label><p class="muted">백업 파일에는 관리 중인 상품과 처리 내역 전체가 포함됩니다. 오래된 백업을 복원하면 정리한 내역이 다시 추가될 수 있습니다.</p><div class="actions"><button id="confirmCleanup" type="button" disabled>2. 확인한 내역 삭제</button><button id="cancelCleanup" type="button">취소</button></div><p id="cleanupMessage" role="status"></p></dialog><section id="panelPush" hidden><div id="pushSection"><h2>푸시 알림 설정</h2><p class="muted">이 기기에 알림을 등록할 수 있습니다. 아이폰은 홈 화면에 추가한 앱에서 실행하세요.</p><div class="actions"><button id="pushEnable" type="button">이 기기 알림 받기</button><button id="pushDisable" type="button" disabled>이 기기 알림 해제</button></div><p id="pushStatus" role="status" aria-live="polite"></p><form id="storeNotifyForm" hidden style="margin-top:24px;border-top:1px solid #dae2ec;padding-top:20px"><h3>매장 자동 알림 설정</h3><label class="backup-check"><input id="storeNotifyEnabled" type="checkbox">매장 자동 알림 사용</label><p class="muted">매장 전체 알림을 끄면 모든 일정의 발송이 중지됩니다. 일정 설정은 유지됩니다.</p><p id="storeNotifyCount" class="muted"></p><div id="storeNotifySchedules"></div><button type="button" id="storeNotifyAdd" style="width:100%;margin-top:12px" disabled>+ 알림 일정 추가</button><div class="actions"><button class="primary" id="storeNotifySave" type="submit" disabled>설정 저장</button><button id="storeNotifyReload" type="button">설정 다시 조회</button></div><p id="storeNotifyStatus" role="status" aria-live="polite"></p><p class="muted">자동 알림은 10분마다 확인합니다. 실행 상황에 따라 수신이 지연되거나 누락될 수 있습니다.</p></form></div></section><section id="panelOwner" hidden><div class="row"><h2>운영 관리</h2><button id="ownerRefresh" type="button">새로고침</button></div><p class="muted" id="ownerUpdated" role="status">조회 전</p><h3>자동화 상태</h3><div id="ownerRuns"></div><p class="muted">GitHub 실행 결과 기준이며 실제 푸시 수신이나 백업 파일 보존을 보장하지 않습니다.</p><h3>Healthchecks 장애 감시</h3><div id="ownerHealth" role="status" aria-live="polite"></div><p class="muted">Healthchecks 수신 신호 기준이며 실제 작업 결과를 보장하지 않습니다.</p><h3>매장 운영 현황</h3><div id="ownerCounts"></div><h3>유지보수</h3><p>GitHub 실행 토큰 등록 만료일: 2027-02-24 (갱신 시 수정 필요)</p><p>상품 처리 이력 15일 · R2 백업 90일 · 알림 이력 90일 · 로그인 시도 7일</p><h3>Supabase DB 사용량</h3><div id="ownerDbUsage" role="status" aria-live="polite"></div><p class="muted">DB 용량 기준이며 디스크·전송량 등 다른 무료 한도와 별개입니다.</p><h3>서비스 사용량 및 상세 관리</h3><p class="muted">그 외 서비스 사용량 및 R2 파일 목록은 아래 관리 페이지에서 확인하세요.</p><div id="ownerLinks"></div></section><footer>포장에 표시된 날짜를 그대로 입력하세요. 날짜만 관리하며 별도 시간 기준은 적용하지 않습니다.</footer><button id="scrollTopBtn" type="button" aria-label="맨 위로 이동" title="맨 위로 이동" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h14M12 20V9m-6 6 6-6 6 6"/></svg></button></main>
 <script>
 'use strict';
 const KEY='bakery-expiry-manager-v1', $=id=>document.getElementById(id);
@@ -69,7 +69,7 @@ const ownerLinks=[
 ];
 function clearOwner(){
  ownerRequest++;ownerAbort?.abort();ownerAbort=null;
- $('ownerRuns').replaceChildren();$('ownerCounts').replaceChildren();$('ownerHealth').replaceChildren();
+ $('ownerRuns').replaceChildren();$('ownerCounts').replaceChildren();$('ownerHealth').replaceChildren();$('ownerDbUsage').replaceChildren();
  $('ownerLinks').replaceChildren();$('ownerUpdated').textContent='조회 전';
  $('ownerRefresh').disabled=false;
 }
@@ -94,7 +94,7 @@ async function fetchOwnerHealth(c,signal){
  if(!response.ok)throw Error('HTTP '+response.status);
  const result=await response.json();
  if(!Array.isArray(result.checks))throw Error('invalid monitoring response');
- return result.checks;
+ return result;
 }
 function renderOwnerHealth(result){
  const target=$('ownerHealth');target.replaceChildren();
@@ -103,11 +103,28 @@ function renderOwnerHealth(result){
  const statuses={up:['정상','badge'],down:['장애','red'],grace:['지연 (유예 중)','amber'],started:['실행 중','amber'],paused:['일시 중지','muted'],new:['수신 전','muted']};
  const time=v=>v&&Number.isFinite(Date.parse(v))?new Date(v).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}):'정보 없음';
  for(const [key,label] of names){
- const check=result.value.find(x=>x?.name===key);
+ const check=result.value.checks.find(x=>x?.name===key);
  const [status,cls]=Object.hasOwn(statuses,check?.status)?statuses[check.status]:['확인 불가','amber'];
  ownerRow(target,label,status,cls);
  target.append(node('p','마지막 수신: '+time(check?.last_ping)+' · 다음 예정: '+time(check?.next_ping),'muted'));
  }
+}
+function renderOwnerDbUsage(result){
+ const target=$('ownerDbUsage');target.replaceChildren();
+ if(result.status!=='fulfilled'){target.textContent='조회 실패 · 모니터 연결 확인 필요';return;}
+ const d=result.value.db_usage;
+ if(!d||![d.total_bytes,d.prod_bytes,d.dev_bytes].every(v=>Number.isSafeInteger(v)&&v>=0)||d.prod_bytes+d.dev_bytes>d.total_bytes){target.textContent='DB 사용량 조회 불가';return;}
+ const limit=500000000,pct=d.total_bytes/limit*100;
+ const mb=v=>(v/1000000).toLocaleString('ko-KR',{minimumFractionDigits:2,maximumFractionDigits:2})+' MB';
+ const cls=pct>=90?'red':pct>=70?'amber':'badge';
+ ownerRow(target,'무료 한도 대비',pct.toFixed(2)+'% · '+(pct>=90?'위험':pct>=70?'주의':'정상'),cls);
+ const progress=node('progress');progress.max=100;progress.value=Math.min(100,pct);progress.setAttribute('aria-label','DB 무료 한도 사용률');progress.style.cssText='width:100%;height:12px';target.append(progress);
+ ownerRow(target,'전체 DB',mb(d.total_bytes)+' / 500 MB');
+ ownerRow(target,'운영 스키마',mb(d.prod_bytes));
+ ownerRow(target,'개발 스키마',mb(d.dev_bytes));
+ ownerRow(target,'기타 및 시스템',mb(d.total_bytes-d.prod_bytes-d.dev_bytes));
+ ownerRow(target,'남은 무료 용량',mb(Math.max(0,limit-d.total_bytes)));
+ ownerRow(target,'90일 후 예상 사용량','산정 전 · 증가량 자료 필요');
 }
 async function refreshOwner(){
  if(currentRole!=='owner'||!ready||!db||!storeId)return;
@@ -115,7 +132,7 @@ async function refreshOwner(){
  const seq=++ownerRequest,g=generation,c=db,store=storeId;
  const valid=()=>seq===ownerRequest&&g===generation&&currentRole==='owner'&&db===c&&storeId===store;
  $('ownerRefresh').disabled=true;$('ownerUpdated').textContent='조회 중…';
- $('ownerRuns').replaceChildren();$('ownerCounts').replaceChildren();$('ownerHealth').textContent='조회 중…';$('ownerLinks').replaceChildren();
+ $('ownerRuns').replaceChildren();$('ownerCounts').replaceChildren();$('ownerHealth').textContent='조회 중…';$('ownerDbUsage').textContent='조회 중…';$('ownerLinks').replaceChildren();
  for(const [name,url] of ownerLinks){const a=node('a',name);a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.style.cssText='display:block;padding:10px 0;border-bottom:1px solid #dae2ec';$('ownerLinks').append(a);}
  const timeout=setTimeout(()=>abort.abort(),12000);
  try{
@@ -144,6 +161,7 @@ async function refreshOwner(){
  ownerJobs.forEach(([name,file],i)=>{const x=results[i];ownerRow($('ownerRuns'),name,x.status==='fulfilled'?x.value[0]:'확인 불가',x.status==='fulfilled'?x.value[1]:'amber','https://github.com/tndnjs321/ExpiryManager/actions/workflows/'+file);});
  countSpecs.forEach(([label],i)=>{const x=results[i+ownerJobs.length];ownerRow($('ownerCounts'),label,x.status==='fulfilled'?x.value+'건':'확인 불가');});
  renderOwnerHealth(results[ownerJobs.length+countSpecs.length]);
+ renderOwnerDbUsage(results[ownerJobs.length+countSpecs.length]);
  $('ownerUpdated').textContent='최근 조회: '+new Date().toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' (한국 시간)';
  }catch(e){if(valid())$('ownerUpdated').textContent='조회 실패 · 다시 시도하세요.';}
  finally{clearTimeout(timeout);if(valid())$('ownerRefresh').disabled=false;}
