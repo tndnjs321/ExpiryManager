@@ -1,10 +1,15 @@
 name: Production daily backup and history cleanup
 
-run-name: ${{ inputs.automatic_run && 'Cloudflare automatic' || 'Manual' }} - backup-prod
+run-name: ${{ inputs.monitor_preview && 'Monitor preview' || inputs.automatic_run && 'Cloudflare automatic' || 'Manual' }} - backup-prod
 
 on:
   workflow_dispatch:
     inputs:
+      monitor_preview:
+        description: 'Read-only monitor test (skip backup, cleanup, and FCM; include R2)'
+        required: false
+        type: boolean
+        default: false
       automatic_run:
         description: 'Set by the Cloudflare scheduler only'
         required: false
@@ -31,7 +36,7 @@ concurrency:
 
 jobs:
   backup:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && inputs.monitor_preview != true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -110,3 +115,63 @@ jobs:
             exit 1
           fi
           echo "Healthchecks signal accepted: $WORKFLOW_STATUS"
+
+  owner-monitor:
+    needs: backup
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (inputs.monitor_preview == true || inputs.automatic_run == true || github.event_name == 'schedule') }}
+    # An automatic monitor failure must not change the backup outcome or Healthchecks ping.
+    # Preview failures remain visible as failed workflow runs.
+    continue-on-error: ${{ inputs.monitor_preview != true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout production source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate monitor script
+        run: python3 -m py_compile scripts/owner-monitor-prod.py
+      - name: Read-only monitor preview
+        if: ${{ inputs.monitor_preview == true }}
+        env:
+          OWNER_MONITOR_JOB_KEY: ${{ secrets.OWNER_MONITOR_JOB_KEY }}
+        run: python3 scripts/owner-monitor-prod.py preview
+      - name: Collect daily and weekly usage and reserve new alerts
+        id: monitor
+        if: ${{ inputs.monitor_preview != true }}
+        env:
+          OWNER_MONITOR_JOB_KEY: ${{ secrets.OWNER_MONITOR_JOB_KEY }}
+        run: python3 scripts/owner-monitor-prod.py check
+      - name: Authenticate to Firebase only when alerts are reserved
+        id: monitor-auth
+        if: ${{ inputs.monitor_preview != true && steps.monitor.outputs.alert_count != '0' && steps.monitor.outcome == 'success' }}
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: projects/387988934070/locations/global/workloadIdentityPools/github-actions/providers/github
+          service_account: notification-sender@personal-notifications-ed12b.iam.gserviceaccount.com
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/firebase.messaging
+          access_token_lifetime: 600s
+          create_credentials_file: false
+          export_environment_variables: false
+      - name: Send reserved warnings to owner devices and record results
+        if: ${{ !cancelled() && inputs.monitor_preview != true && steps.monitor.outcome == 'success' && steps.monitor.outputs.alert_count != '0' }}
+        env:
+          OWNER_MONITOR_JOB_KEY: ${{ secrets.OWNER_MONITOR_JOB_KEY }}
+          PGHOST: ${{ secrets.DB_HOST }}
+          PGUSER: ${{ secrets.PROD_NOTIFY_DB_USER }}
+          PGPASSWORD: ${{ secrets.PROD_NOTIFY_DB_PASSWORD }}
+          FCM_ACCESS_TOKEN: ${{ steps.monitor-auth.outputs.access_token }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGCONNECT_TIMEOUT: '20'
+        run: |
+          set -euo pipefail
+          export PGSSLROOTCERT="$GITHUB_WORKSPACE/scripts/certs/prod-ca-2021.crt"
+          python3 scripts/owner-monitor-prod.py send
+      - name: Surface incomplete metric collection
+        if: ${{ !cancelled() && inputs.monitor_preview != true && steps.monitor.outcome == 'success' && steps.monitor.outputs.failed_count != '0' }}
+        run: |
+          echo "::error::One or more monitor queries failed; inspect the monitoring job."
+          exit 1
